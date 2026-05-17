@@ -1,3 +1,10 @@
+"""
+Weather Monitoring Dashboard - Track B
+=======================================
+A real-time weather monitoring dashboard with sliding window data visualization,
+threshold alerts, and auto-refresh capabilities.
+"""
+
 import streamlit as st
 import pandas as pd
 import numpy as np
@@ -8,12 +15,16 @@ from datetime import datetime
 from collections import deque
 import time
 
+# ============================================
+# STEP 1: PAGE CONFIGURATION
+# ============================================
+# Set the Streamlit page title, icon, and layout mode
 st.set_page_config(page_title="Weather Monitor - Track B", page_icon="🌤️", layout="wide")
 
 # ============================================
-# CONFIGURATION
+# STEP 2: CONFIGURATION CONSTANTS
 # ============================================
-
+# Dictionary of cities with their geographical coordinates (latitude, longitude)
 CITIES = {
     "London, UK": (51.5074, -0.1278),
     "New York, USA": (40.7128, -74.0060),
@@ -27,32 +38,60 @@ CITIES = {
     "Rome, Italy": (41.9028, 12.4964)
 }
 
+# Sliding window size - stores only the last N readings
 WINDOW_SIZE = 20
-TEMP_ALERT_HIGH = 30
-TEMP_ALERT_LOW = 0
-WIND_ALERT = 50
+
+# Alert thresholds for weather parameters
+TEMP_ALERT_HIGH = 30      # Temperature above 30°C triggers heat alert
+TEMP_ALERT_LOW = 0        # Temperature below 0°C triggers freeze warning
+WIND_ALERT = 50           # Wind speed above 50 km/h triggers wind alert
 
 # ============================================
-# INITIALIZE SESSION STATE
+# STEP 3: SESSION STATE INITIALIZATION
 # ============================================
+# Streamlit session state persists data across reruns
+# Using deques with maxlen creates automatic sliding windows
 
 if 'temps' not in st.session_state:
+    # Deque for temperature readings (automatically drops oldest when full)
     st.session_state.temps = deque(maxlen=WINDOW_SIZE)
+    # Deque for humidity readings
     st.session_state.humidities = deque(maxlen=WINDOW_SIZE)
+    # Deque for wind speed readings
     st.session_state.winds = deque(maxlen=WINDOW_SIZE)
+    # Deque for timestamps of each reading
     st.session_state.times = deque(maxlen=WINDOW_SIZE)
+    # Timestamp of the last successful data fetch
     st.session_state.last_update = None
+    # Currently selected city
     st.session_state.city = "London, UK"
+    # Auto-refresh toggle state
     st.session_state.auto_refresh = False
+    # List to store alert messages (max 10 most recent)
     st.session_state.alert_history = []
 
 # ============================================
-# API FUNCTIONS
+# STEP 4: API FUNCTIONS
 # ============================================
 
 def get_weather(lat, lon):
-    """Get real weather data from Open-Meteo API"""
+    """
+    Fetch real-time weather data from Open-Meteo API
+    
+    Parameters:
+    -----------
+    lat : float
+        Latitude of the location
+    lon : float
+        Longitude of the location
+    
+    Returns:
+    --------
+    dict : Weather data containing temperature, wind speed, humidity,
+           and success status
+    """
     try:
+        # Fetch current weather data (temperature and wind speed)
         url = f"https://api.open-meteo.com/v1/forecast?latitude={lat}&longitude={lon}&current_weather=true"
         response = requests.get(url, timeout=10)
         
@@ -60,10 +99,11 @@ def get_weather(lat, lon):
             data = response.json()
             weather = data['current_weather']
             
-            # Get humidity
+            # Fetch humidity data separately (hourly forecast)
             hourly_url = f"https://api.open-meteo.com/v1/forecast?latitude={lat}&longitude={lon}&hourly=relativehumidity_2m"
             hourly_response = requests.get(hourly_url, timeout=10)
-            humidity = 65
+            humidity = 65  # Default fallback value
+            
             if hourly_response.status_code == 200:
                 hourly_data = hourly_response.json()
                 if 'hourly' in hourly_data and 'relativehumidity_2m' in hourly_data['hourly']:
@@ -77,47 +117,62 @@ def get_weather(lat, lon):
             }
         return {'success': False}
     except Exception as e:
+        # Return failure status on any exception (network error, timeout, etc.)
         return {'success': False}
 
 def update_data():
-    """Fetch data and update sliding window"""
+    """
+    Fetch current weather data and update the sliding window deques
+    Also checks for threshold violations and adds alerts to history
+    
+    Returns:
+    --------
+    bool : True if data was successfully fetched and updated, False otherwise
+    """
+    # Get coordinates for selected city
     lat, lon = CITIES[st.session_state.city]
     weather = get_weather(lat, lon)
     
     if weather['success']:
         now = datetime.now()
+        
+        # Append new data to sliding windows
         st.session_state.temps.append(weather['temp'])
         st.session_state.humidities.append(weather['humidity'])
         st.session_state.winds.append(weather['wind'])
         st.session_state.times.append(now)
         st.session_state.last_update = now
         
-        # Check for alerts
+        # Check for temperature alerts
         temp = weather['temp']
         if temp > TEMP_ALERT_HIGH:
             st.session_state.alert_history.insert(0, f"HEAT: {temp:.1f}C at {now.strftime('%H:%M:%S')}")
         elif temp < TEMP_ALERT_LOW:
             st.session_state.alert_history.insert(0, f"FREEZE: {temp:.1f}C at {now.strftime('%H:%M:%S')}")
         
+        # Check for wind alerts
         if weather['wind'] > WIND_ALERT:
             st.session_state.alert_history.insert(0, f"WIND: {weather['wind']:.1f} km/h at {now.strftime('%H:%M:%S')}")
         
+        # Keep only the last 10 alerts
         st.session_state.alert_history = st.session_state.alert_history[:10]
         return True
     return False
 
 # ============================================
-# SIDEBAR
+# STEP 5: SIDEBAR CONTROLS
 # ============================================
 
 with st.sidebar:
     st.title("Controls")
     st.markdown("---")
     
+    # City selection dropdown
     st.session_state.city = st.selectbox("Select City", list(CITIES.keys()))
     
     st.markdown("---")
     
+    # Manual refresh button
     if st.button("Manual Refresh", use_container_width=True):
         with st.spinner("Fetching..."):
             if update_data():
@@ -126,11 +181,13 @@ with st.sidebar:
             else:
                 st.error("Failed to fetch")
     
+    # Auto-refresh toggle switch
     auto_refresh = st.toggle("Auto-Refresh (every 10 sec)", value=st.session_state.auto_refresh)
     if auto_refresh != st.session_state.auto_refresh:
         st.session_state.auto_refresh = auto_refresh
         st.rerun()
     
+    # Reset button to clear all stored data
     if st.button("Reset All Data", use_container_width=True):
         st.session_state.temps.clear()
         st.session_state.humidities.clear()
@@ -141,24 +198,27 @@ with st.sidebar:
     
     st.markdown("---")
     
+    # Status indicators
     if st.session_state.last_update:
         st.success(f"Last update: {st.session_state.last_update.strftime('%H:%M:%S')}")
     else:
         st.info("Click refresh to start")
     
+    # Display current data collection status
     st.caption(f"Data points: {len(st.session_state.temps)}/{WINDOW_SIZE}")
     st.caption(f"Total updates: {len(st.session_state.temps)}")
 
 # ============================================
-# MAIN CONTENT
+# STEP 6: MAIN CONTENT HEADER
 # ============================================
 
 st.title("Real-Time Weather Intelligence Dashboard")
 st.caption("Track B: Live Streaming | Sliding Window | Multi-Chart Visualization | Threshold Alerts")
 
 # ============================================
-# ALERT BANNER
+# STEP 7: ALERT BANNER
 # ============================================
+# Display prominent alert messages when thresholds are exceeded
 
 if len(st.session_state.temps) > 0:
     current_temp = st.session_state.temps[-1]
@@ -180,8 +240,9 @@ if len(st.session_state.temps) > 0:
             st.info(f"Wind speed: {current_wind:.1f} km/h")
 
 # ============================================
-# CURRENT METRICS
+# STEP 8: CURRENT METRICS DISPLAY
 # ============================================
+# Display key metrics with delta indicators (change from previous reading)
 
 if len(st.session_state.temps) > 0:
     col1, col2, col3, col4 = st.columns(4)
@@ -215,12 +276,14 @@ else:
 st.markdown("---")
 
 # ============================================
-# MULTIPLE CHARTS
+# STEP 9: MULTI-CHART VISUALIZATION
 # ============================================
+# Create three vertically stacked charts showing trends over time
 
 st.subheader("Sliding Window Visualizations (Last 20 Readings)")
 
 if len(st.session_state.temps) >= 2:
+    # Create subplot with 3 rows, 1 column
     fig = make_subplots(
         rows=3, cols=1,
         subplot_titles=("Temperature Trend (C)", "Humidity Trend (%)", "Wind Speed Trend (km/h)"),
@@ -228,7 +291,8 @@ if len(st.session_state.temps) >= 2:
         shared_xaxes=True
     )
     
-    # Chart 1: Temperature
+    # CHART 1: Temperature (Line chart with fill)
+    # Color points differently when alert thresholds are crossed
     temp_colors = ['red' if t > TEMP_ALERT_HIGH or t < TEMP_ALERT_LOW else '#FF6B35' 
                    for t in list(st.session_state.temps)]
     
@@ -240,12 +304,13 @@ if len(st.session_state.temps) >= 2:
             name='Temperature',
             line=dict(color='#FF6B35', width=3),
             marker=dict(size=8, color=temp_colors),
-            fill='tozeroy',
+            fill='tozeroy',  # Fill area under the line
             fillcolor='rgba(255,107,53,0.15)'
         ),
         row=1, col=1
     )
     
+    # Add horizontal lines for alert thresholds
     fig.add_hline(y=TEMP_ALERT_HIGH, line_dash="dash", line_color="red",
                   annotation_text=f"Heat Alert ({TEMP_ALERT_HIGH}C)", 
                   row=1, col=1)
@@ -253,7 +318,7 @@ if len(st.session_state.temps) >= 2:
                   annotation_text=f"Freeze ({TEMP_ALERT_LOW}C)", 
                   row=1, col=1)
     
-    # Chart 2: Humidity
+    # CHART 2: Humidity (Line chart)
     fig.add_trace(
         go.Scatter(
             x=list(st.session_state.times),
@@ -268,7 +333,8 @@ if len(st.session_state.temps) >= 2:
         row=2, col=1
     )
     
-    # Chart 3: Wind Speed
+    # CHART 3: Wind Speed (Bar chart)
+    # Color bars red when exceeding wind alert threshold
     wind_colors = ['red' if w > WIND_ALERT else '#32CD32' for w in list(st.session_state.winds)]
     
     fig.add_trace(
@@ -282,25 +348,32 @@ if len(st.session_state.temps) >= 2:
         row=3, col=1
     )
     
+    # Add wind alert threshold line
     fig.add_hline(y=WIND_ALERT, line_dash="dash", line_color="red",
                   annotation_text=f"Wind Alert ({WIND_ALERT} km/h)", 
                   row=3, col=1)
     
+    # Update layout and axes properties
     fig.update_layout(
         height=800,
         showlegend=False,
-        hovermode='x unified',
+        hovermode='x unified',  # Show all values at the same x coordinate
         template='plotly_white'
     )
     
+    # Set y-axis ranges for consistent scaling
     fig.update_yaxes(title_text="Temperature (C)", range=[-10, 45], row=1, col=1)
     fig.update_yaxes(title_text="Humidity (%)", range=[0, 100], row=2, col=1)
     fig.update_yaxes(title_text="Wind Speed (km/h)", range=[0, 80], row=3, col=1)
     fig.update_xaxes(title_text="Time", row=3, col=1)
     
+    # Display the chart
     st.plotly_chart(fig, use_container_width=True)
     
-    # Statistics
+    # STEP 10: STATISTICS SECTION
+    # ============================================
+    # Calculate and display summary statistics for the current window
+    
     st.subheader("Window Statistics")
     col1, col2, col3, col4 = st.columns(4)
     
@@ -316,18 +389,20 @@ if len(st.session_state.temps) >= 2:
         st.metric("Avg Wind Speed", f"{np.mean(wind_array):.1f} km/h")
     with col4:
         if len(temp_array) > 1:
+            # Calculate overall trend from first to last reading
             trend = temp_array[-1] - temp_array[0]
             st.metric("Temperature Trend", f"{trend:+.1f}C")
 else:
     st.info("Collecting data... Perform a manual refresh to see the charts (need 2+ data points)")
 
 # ============================================
-# ALERT HISTORY
+# STEP 11: ALERT HISTORY
 # ============================================
+# Display the most recent alerts in a scrollable list
 
 if st.session_state.alert_history:
     st.subheader("Alert History")
-    for alert in st.session_state.alert_history[:5]:
+    for alert in st.session_state.alert_history[:5]:  # Show only last 5 alerts
         if "HEAT" in alert:
             st.error(alert)
         elif "FREEZE" in alert:
@@ -336,11 +411,13 @@ if st.session_state.alert_history:
             st.info(alert)
 
 # ============================================
-# DATA TABLE
+# STEP 12: RAW DATA TABLE (Expandable)
 # ============================================
+# Provide option to view the underlying data in tabular format
 
 with st.expander("View Raw Data"):
     if len(st.session_state.temps) > 0:
+        # Create pandas DataFrame from deques
         data_df = pd.DataFrame({
             'Timestamp': list(st.session_state.times),
             'Temperature (C)': list(st.session_state.temps),
@@ -352,10 +429,12 @@ with st.expander("View Raw Data"):
         st.info("No data available")
 
 # ============================================
-# AUTO-REFRESH LOGIC
+# STEP 13: AUTO-REFRESH LOGIC
 # ============================================
+# If auto-refresh is enabled, wait 10 seconds and fetch new data
+# Limited to 50 updates to prevent infinite loops
 
 if st.session_state.auto_refresh and len(st.session_state.temps) < 50:
-    time.sleep(10)
-    update_data()
-    st.rerun()
+    time.sleep(10)      # Wait 10 seconds between refreshes
+    update_data()       # Fetch new data
+    st.rerun()          # Rerun the app to update the UI
