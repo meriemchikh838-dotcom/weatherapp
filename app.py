@@ -76,24 +76,16 @@ if 'temps' not in st.session_state:
 
 def get_weather(lat, lon):
     try:
-        url = f"https://api.open-meteo.com/v1/forecast?latitude={lat}&longitude={lon}&current_weather=true"
+        url = f"https://api.open-meteo.com/v1/forecast?latitude={lat}&longitude={lon}&current_weather=true&hourly=relative_humidity_2m"
         response = requests.get(url, timeout=10)
-        st.write(f"Current weather status: {response.status_code}")
         
         if response.status_code == 200:
             data = response.json()
             weather = data['current_weather']
             
-            hourly_url = f"https://api.open-meteo.com/v1/forecast?latitude={lat}&longitude={lon}&hourly=relative_humidity_2m"
-            hourly_response = requests.get(hourly_url, timeout=10)
-            st.write(f"Humidity status: {hourly_response.status_code}")
-            st.write(f"Humidity response: {hourly_response.json()}")
             humidity = 65
-
-            if hourly_response.status_code == 200:
-                hourly_data = hourly_response.json()
-                if 'hourly' in hourly_data and 'relative_humidity_2m' in hourly_data['hourly']:
-                    humidity = hourly_data['hourly']['relative_humidity_2m'][0]
+            if 'hourly' in data and 'relative_humidity_2m' in data['hourly']:
+                humidity = data['hourly']['relative_humidity_2m'][0]
             
             return {
                 'temp': weather['temperature'],
@@ -103,7 +95,6 @@ def get_weather(lat, lon):
             }
         return {'success': False}
     except Exception as e:
-        st.write(f"Error: {e}")
         return {'success': False}
 
 def update_data():
