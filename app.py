@@ -75,35 +75,21 @@ if 'temps' not in st.session_state:
 # ============================================
 
 def get_weather(lat, lon):
-    """
-    Fetch real-time weather data from Open-Meteo API
-    
-    Parameters:
-    -----------
-    lat : float
-        Latitude of the location
-    lon : float
-        Longitude of the location
-    
-    Returns:
-    --------
-    dict : Weather data containing temperature, wind speed, humidity,
-           and success status
-    """
     try:
-        # Fetch current weather data (temperature and wind speed)
         url = f"https://api.open-meteo.com/v1/forecast?latitude={lat}&longitude={lon}&current_weather=true"
         response = requests.get(url, timeout=10)
+        st.write(f"Current weather status: {response.status_code}")
         
         if response.status_code == 200:
             data = response.json()
             weather = data['current_weather']
             
-            # Fetch humidity data separately (hourly forecast)
             hourly_url = f"https://api.open-meteo.com/v1/forecast?latitude={lat}&longitude={lon}&hourly=relative_humidity_2m"
             hourly_response = requests.get(hourly_url, timeout=10)
-            humidity = 65  # Default fallback value
-            
+            st.write(f"Humidity status: {hourly_response.status_code}")
+            st.write(f"Humidity response: {hourly_response.json()}")
+            humidity = 65
+
             if hourly_response.status_code == 200:
                 hourly_data = hourly_response.json()
                 if 'hourly' in hourly_data and 'relative_humidity_2m' in hourly_data['hourly']:
@@ -117,7 +103,7 @@ def get_weather(lat, lon):
             }
         return {'success': False}
     except Exception as e:
-        # Return failure status on any exception (network error, timeout, etc.)
+        st.write(f"Error: {e}")
         return {'success': False}
 
 def update_data():
