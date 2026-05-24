@@ -100,14 +100,14 @@ def get_weather(lat, lon):
             weather = data['current_weather']
             
             # Fetch humidity data separately (hourly forecast)
-            hourly_url = f"https://api.open-meteo.com/v1/forecast?latitude={lat}&longitude={lon}&hourly=relativehumidity_2m"
+            hourly_url = f"https://api.open-meteo.com/v1/forecast?latitude={lat}&longitude={lon}&hourly=relative_humidity_2m"
             hourly_response = requests.get(hourly_url, timeout=10)
             humidity = 65  # Default fallback value
             
             if hourly_response.status_code == 200:
                 hourly_data = hourly_response.json()
                 if 'hourly' in hourly_data and 'relativehumidity_2m' in hourly_data['hourly']:
-                    humidity = hourly_data['hourly']['relativehumidity_2m'][0]
+                    humidity = hourly_data['hourly']['relative_humidity_2m'][0]
             
             return {
                 'temp': weather['temperature'],
