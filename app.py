@@ -106,7 +106,7 @@ def get_weather(lat, lon):
             
             if hourly_response.status_code == 200:
                 hourly_data = hourly_response.json()
-                if 'hourly' in hourly_data and 'relativehumidity_2m' in hourly_data['hourly']:
+                if 'hourly' in hourly_data and 'relative_humidity_2m' in hourly_data['hourly']:
                     humidity = hourly_data['hourly']['relative_humidity_2m'][0]
             
             return {
