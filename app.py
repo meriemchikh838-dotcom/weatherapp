@@ -76,21 +76,21 @@ if 'temps' not in st.session_state:
 
 def get_weather(lat, lon):
     try:
-        url = f"https://api.open-meteo.com/v1/forecast?latitude={lat}&longitude={lon}&current_weather=true&hourly=relative_humidity_2m"
+        # Find city name from coordinates
+        city = [k for k, v in CITIES.items() if v == (lat, lon)][0]
+        city_query = city.split(",")[0].replace(" ", "+")
+        
+        url = f"https://wttr.in/{city_query}?format=j1"
         response = requests.get(url, timeout=10)
         
         if response.status_code == 200:
             data = response.json()
-            weather = data['current_weather']
-            
-            humidity = 65
-            if 'hourly' in data and 'relative_humidity_2m' in data['hourly']:
-                humidity = data['hourly']['relative_humidity_2m'][0]
+            current = data['current_condition'][0]
             
             return {
-                'temp': weather['temperature'],
-                'wind': weather['windspeed'],
-                'humidity': humidity,
+                'temp': float(current['temp_C']),
+                'wind': float(current['windspeedKmph']),
+                'humidity': float(current['humidity']),
                 'success': True
             }
         return {'success': False}
